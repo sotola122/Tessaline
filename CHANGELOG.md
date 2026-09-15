@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- `renderInterfaceSVG()` rejects multi-operation specs (`IF_E_SVG_MULTI_OP`); full specs stay on HTML for PDF pagination
+- Document SVG as single-operation preview/export only
+
 ## 0.1.1
 
 - Overview operation links honor `options.idPrefix`

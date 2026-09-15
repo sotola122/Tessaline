@@ -60,6 +60,18 @@ describe("interface HTML API", () => {
     expect(print).toContain("table-header-group");
   });
 
+  test("multi-operation HTML keeps thead and long addresses", () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../examples/rest-device-fleet.yml"),
+      "utf8",
+    );
+    const result = renderInterfaceHTML(source, { sourcePath: "rest-device-fleet.yml" });
+    expect(result.operationIds.length).toBeGreaterThan(1);
+    expect(result.html).toContain("<thead");
+    expect(result.html).toContain("/v1/tenants/{tenantId}/devices");
+    expect(result.html.match(/<table/g)?.length ?? 0).toBeGreaterThan(1);
+  });
+
   test("overview links include idPrefix", () => {
     const result = renderInterfaceHTML(yaml, { idPrefix: "doc-" });
     expect(result.html).toContain('href="#doc-');

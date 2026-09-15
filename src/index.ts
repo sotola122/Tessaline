@@ -171,6 +171,19 @@ export function renderInterfaceSVG(
       ],
     };
   }
+  if (filtered.operations.length > 1) {
+    throw new TessalineError(
+      "SVG output is limited to a single operation. Use renderer: html for the full spec, or set operation: <id> to export one operation as SVG.",
+      [
+        {
+          code: "IF_E_SVG_MULTI_OP",
+          severity: "error",
+          message:
+            "SVG output is limited to a single operation. Use renderer: html for the full spec, or set operation: <id> to export one operation as SVG.",
+        },
+      ],
+    );
+  }
   const normalized = normalizeSpec(filtered);
   const rendered = renderSpecSvg(normalized, options);
   return {

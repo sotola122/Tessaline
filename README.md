@@ -23,15 +23,24 @@ Errors throw `TessalineError`.
 
 ## SVG tables
 
+`renderInterfaceSVG()` is a **single-operation** preview/export. It does not
+paginate. Full Interface Specs belong on the HTML/CSS path so the PDF engine
+can break tables across pages.
+
 ```ts
 import { renderInterfaceSVG } from "@sotola122/tessaline";
 
-const { svg } = renderInterfaceSVG(yamlSource);
+const { svg } = renderInterfaceSVG(yamlSource, { operation: "getItem" });
 ```
+
+md-docs `apidoc` fences default to HTML. `renderer: svg` is allowed only when
+the filtered spec has exactly one operation (`operation:` or an include that
+leaves one). Multiple operations raise `IF_E_SVG_MULTI_OP` and should use
+`renderer: html`.
 
 The SVG renderer measures columns and wraps cell text. It does not use Yoga or `foreignObject`.
 
-md-docs `apidoc` fences can set `renderer: svg` to take this path.
+Full-spec SVGs under `examples/` are stress/reference only and are not a PDF baseline.
 
 ## Examples
 

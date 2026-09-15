@@ -6,6 +6,7 @@ import {
   parseInterfaceSpec,
   renderInterfaceHTML,
   renderInterfaceSVG,
+  TessalineError,
 } from "../src/index.ts";
 
 const examplesDir = join(dirname(fileURLToPath(import.meta.url)), "../examples");
@@ -30,13 +31,25 @@ describe("tessaline examples", () => {
       expect(html.html.length).toBeGreaterThan(0);
       expect(html.html).not.toContain("<script");
       expect(html.operationIds.length).toBeGreaterThan(0);
+      expect(html.html).toContain("<thead");
 
-      const svg = renderInterfaceSVG(source, { sourcePath: file });
+      const first = html.operationIds[0]!;
+      const svg = renderInterfaceSVG(source, {
+        sourcePath: file,
+        operation: first,
+      });
       expect(svg.svg).toContain("<svg");
       expect((svg.svg.match(/<svg\b/g) ?? []).length).toBe(1);
       expect(svg.svg).not.toContain("foreignObject");
       expect(svg.width).toBeGreaterThan(0);
       expect(svg.height).toBeGreaterThan(0);
+      expect(svg.operationIds).toEqual([first]);
+
+      if (html.operationIds.length > 1) {
+        expect(() => renderInterfaceSVG(source, { sourcePath: file })).toThrow(
+          TessalineError,
+        );
+      }
     });
   }
 });
