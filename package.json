@@ -1,0 +1,63 @@
+{
+  "name": "@sotola122/tessaline",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Interface Spec tables: YAML → HTML (default) or SVG. No Yoga.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": {
+      "bun": "./src/styles.css",
+      "import": "./dist/styles.css",
+      "default": "./dist/styles.css"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sotola122/Tessaline.git"
+  },
+  "homepage": "https://github.com/sotola122/Tessaline",
+  "bugs": {
+    "url": "https://github.com/sotola122/Tessaline/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "keywords": [
+    "interface-spec",
+    "api-docs",
+    "html",
+    "svg",
+    "yaml"
+  ],
+  "author": "sotola122",
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
+  }
+}
