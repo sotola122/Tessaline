@@ -18,6 +18,7 @@ import {
   renderBadge,
   renderCode,
   renderOperationLink,
+  renderRetryableBadge,
   renderSection,
   renderStatus,
   renderTransportChip,
@@ -32,6 +33,7 @@ type TableConfig = {
 
 export function renderOverviewTable(
   operations: readonly NormalizedOperation[],
+  idPrefix = "",
 ): string {
   return renderTable({
     title: "Operation Overview",
@@ -39,7 +41,7 @@ export function renderOverviewTable(
     headers: ["Operation", "Transport", "Pattern", "Address"],
     rows: operations.map((operation) => [
       [
-        `<div class="if-stack">${renderOperationLink(operation.title, operation.id)}</div>`,
+        `<div class="if-stack">${renderOperationLink(operation.title, operation.id, idPrefix)}</div>`,
         `<div class="if-subtle">${renderCode(operation.id)}</div>`,
       ].join(""),
       renderTransportChip(operation.transport),
@@ -156,9 +158,7 @@ export function renderErrorTable(rows: readonly NormalizedErrorRow[]): string {
     rows: rows.map((row) => [
       renderCode(row.code),
       row.status ? renderStatus(row.status) : "—",
-      row.retryable === true
-        ? renderBadge("Retryable", "retryable-yes")
-        : renderBadge("Non-retryable", "retryable-no"),
+      renderRetryableBadge(row.retryable),
       escapeHtml(row.description),
     ]),
   });

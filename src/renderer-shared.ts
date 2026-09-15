@@ -52,9 +52,22 @@ export function renderStatus(status: string): string {
 export function renderOperationLink(
   label: string,
   operationId: string,
+  idPrefix = "",
 ): string {
-  const anchorId = escapeAttribute(buildOperationAnchorId(operationId));
+  const anchorId = escapeAttribute(buildOperationAnchorId(operationId, idPrefix));
   return `<a class="if-link" href="#${anchorId}">${escapeHtml(label)}</a>`;
+}
+
+export function retryableLabel(retryable: boolean | undefined): string {
+  if (retryable === true) return "Retryable";
+  if (retryable === false) return "Non-retryable";
+  return "—";
+}
+
+export function renderRetryableBadge(retryable: boolean | undefined): string {
+  if (retryable === true) return renderBadge("Retryable", "retryable-yes");
+  if (retryable === false) return renderBadge("Non-retryable", "retryable-no");
+  return renderBadge("—", "retryable-unspecified");
 }
 
 export function renderTransportChip(transport: string): string {

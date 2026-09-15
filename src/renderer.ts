@@ -42,7 +42,7 @@ export function renderSpecFragment(
   ].filter((value) => value !== "");
   const overview =
     operations.length > 0
-      ? renderOverviewTable(operations)
+      ? renderOverviewTable(operations, options.idPrefix ?? "")
       : renderSection(
           "Operation Overview",
           '<p class="if-empty">No operations matched the current filter.</p>',

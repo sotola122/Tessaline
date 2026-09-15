@@ -1,4 +1,5 @@
 import { escapeXml } from "./svg-xml.ts";
+import { retryableLabel } from "./renderer-shared.ts";
 import type {
   NormalizedAddress,
   NormalizedErrorRow,
@@ -173,7 +174,7 @@ function errorTable(rows: readonly NormalizedErrorRow[]): TableModel {
     rows: rows.map((row) => [
       row.code,
       row.status ?? "—",
-      row.retryable === true ? "Retryable" : "Non-retryable",
+      retryableLabel(row.retryable),
       row.description,
     ]),
   };

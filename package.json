@@ -1,6 +1,6 @@
 {
   "name": "@sotola122/tessaline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "description": "Interface Spec tables: YAML → HTML (default) or SVG. No Yoga.",
   "type": "module",

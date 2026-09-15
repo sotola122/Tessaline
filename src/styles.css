@@ -132,6 +132,12 @@
   border-color: rgba(148, 163, 184, 0.24);
 }
 
+.if-badge--retryable-unspecified {
+  background: var(--if-bg-soft);
+  color: var(--if-muted);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
 .if-chip--http {
   background: #ecfdf5;
   color: #047857;
@@ -514,8 +520,6 @@
   .if-generic-table,
   .if-response-table,
   .if-error-table {
-    table-layout: fixed;
-    min-width: 100%;
     font-size: 0.84rem;
   }
 
@@ -742,8 +746,13 @@
     padding: 3px 4px;
   }
 
-  .if-generic-table code {
-    font-size: 0.8em;
+  .if-generic-table code,
+  code,
+  .if-code,
+  .if-chip,
+  .if-badge,
+  .if-status {
+    font-size: 8pt;
   }
 
   .if-table--gatt-service {
