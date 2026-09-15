@@ -1,0 +1,174 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: device-live-log-v1
+  title: Device live log WebSocket
+  version: 1.0.0
+  description: |
+    Bidirectional stream used by factory tools. The device pushes framed log
+    records; the host can inject a filter and request a ring-buffer dump.
+
+servers:
+  websocket:
+    url: wss://device-proxy.thinca.example/v1/devices/{deviceId}/logs
+
+auth:
+  schemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+components:
+  schemas:
+    LogRecord:
+      type: object
+      fields:
+        seq:
+          type: integer
+          required: true
+          example: 90211
+        ts:
+          type: datetime
+          required: true
+          example: "2026-09-15T02:14:11.214Z"
+        level:
+          type: string
+          required: true
+          enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL]
+          example: WARN
+        logger:
+          type: string
+          required: true
+          example: sht4x
+        message:
+          type: string
+          required: true
+          example: nack after 5 retries
+        fields:
+          type: object
+          fields:
+            i2cAddr:
+              type: string
+              example: "0x44"
+            retries:
+              type: integer
+              example: 5
+    FilterCommand:
+      type: object
+      fields:
+        minLevel:
+          type: string
+          required: true
+          enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL]
+          example: INFO
+        loggers:
+          type: array
+          items:
+            type: string
+          example: ["sht4x", "dfu"]
+        sinceSeq:
+          type: integer
+          example: 90000
+    DumpRequest:
+      type: object
+      fields:
+        maxRecords:
+          type: integer
+          required: true
+          example: 256
+    StreamError:
+      type: object
+      fields:
+        code:
+          type: string
+          required: true
+          enum: [UNAUTHORIZED, DEVICE_OFFLINE, BACKPRESSURE]
+          example: BACKPRESSURE
+        retryAfterMs:
+          type: integer
+          example: 1500
+
+operations:
+  - id: ws.logs.open
+    title: Open live log stream
+    summary: Host connects; device starts pushing LogRecord frames.
+    interfaceType: stream
+    transport: websocket
+    pattern: stream
+    tags: [websocket, logs, factory]
+    auth: bearer
+    address:
+      kind: url
+      value: /v1/devices/{deviceId}/logs
+    parameters:
+      path:
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+      query:
+        sinceSeq:
+          type: integer
+          required: false
+          description: Replay from this sequence if the ring buffer still holds it.
+        format:
+          type: string
+          required: false
+          enum: [json, cbor]
+          example: json
+    bindings:
+      websocket:
+        subprotocol: thinca.logs.v1
+        pingIntervalMs: 15000
+        maxFrameBytes: 4096
+        compression: permessage-deflate
+    messages:
+      - id: log.record
+        role: notification
+        direction: serverToClient
+        contentType: application/json
+        schema: LogRecord
+      - id: log.filter
+        role: command
+        direction: clientToServer
+        contentType: application/json
+        schema: FilterCommand
+      - id: log.dump
+        role: request
+        direction: clientToServer
+        contentType: application/json
+        schema: DumpRequest
+      - id: log.error
+        role: error
+        direction: serverToClient
+        contentType: application/json
+        schema: StreamError
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+      duplicateHandling: seq
+    retry:
+      maxAttempts: 5
+      backoff: exponential
+      initialDelayMs: 250
+    errors:
+      - code: DEVICE_OFFLINE
+        status: 1013
+        retryable: true
+        description: Proxy could not reach the device; retry with backoff.
+      - code: BACKPRESSURE
+        retryable: true
+        description: Device log ring overrun; host should raise minLevel.
+    examples:
+      - title: Warn from humidity sensor
+        role: notification
+        value:
+          seq: 90211
+          level: WARN
+          logger: sht4x
+          message: nack after 5 retries
+      - title: Raise filter to INFO
+        role: command
+        value:
+          minLevel: INFO
+          loggers: ["sht4x", "dfu"]

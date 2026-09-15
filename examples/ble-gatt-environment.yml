@@ -1,0 +1,148 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: ble-gatt-environment-v1
+  title: Environmental Sensor BLE GATT profile
+  version: 1.2.0
+  description: |
+    Custom 128-bit environmental service plus battery. Packed measurement
+    characteristic, writable interval, CCCD for notify/indicate.
+
+servers:
+  ble:
+    role: peripheral
+    deviceName: Thinca ENV
+    appearance: 0x0541
+
+auth:
+  schemes:
+    bleSecureConnection:
+      type: ble-pairing
+      pairing: leSecureConnections
+      securityMode: encrypted
+
+components:
+  schemas:
+    PackedMeasurement:
+      type: object
+      fields:
+        flags:
+          type: integer
+          required: true
+          example: 7
+          description: Bit0 temp, bit1 humidity, bit2 pressure.
+        temperatureCentiC:
+          type: integer
+          required: false
+          unit: 0.01celsius
+          example: 2462
+        humidityCentiPct:
+          type: integer
+          required: false
+          unit: 0.01percent
+          example: 5180
+        pressurePa:
+          type: integer
+          required: false
+          unit: pascal
+          example: 101325
+    ReportInterval:
+      type: object
+      fields:
+        intervalSec:
+          type: integer
+          required: true
+          unit: second
+          example: 10
+          description: 1..3600, device clamps to supported rates.
+    BatteryLevel:
+      type: object
+      fields:
+        percent:
+          type: integer
+          required: true
+          unit: percent
+          example: 87
+    Cccd:
+      type: object
+      fields:
+        notificationsEnabled:
+          type: boolean
+          required: true
+          example: true
+        indicationsEnabled:
+          type: boolean
+          required: true
+          example: false
+
+operations:
+  - id: ble.env.service
+    title: Environmental sensing service
+    summary: Primary custom service exposing packed measurement and interval.
+    interfaceType: device
+    transport: ble-gatt
+    pattern: attributeAccess
+    tags: [ble, gatt, environment]
+    auth: bleSecureConnection
+    address:
+      kind: gattService
+      value: 12345678-1234-5678-1234-56789abcdef0
+    bindings:
+      ble-gatt:
+        role: gattServer
+        service:
+          uuid: 12345678-1234-5678-1234-56789abcdef0
+          type: primary
+        characteristics:
+          - id: measurement
+            uuid: 12345678-1234-5678-1234-56789abcdef1
+            properties: [read, notify, indicate]
+            value:
+              schema: PackedMeasurement
+            descriptors:
+              - uuid: "0x2902"
+                value:
+                  schema: Cccd
+          - id: interval
+            uuid: 12345678-1234-5678-1234-56789abcdef2
+            properties: [read, write, writeWithoutResponse]
+            value:
+              schema: ReportInterval
+          - id: serial
+            uuid: "0x2A25"
+            properties: [read]
+            value:
+              schema:
+                type: object
+                fields:
+                  serial:
+                    type: string
+                    required: true
+                    example: TN-24-184422
+
+  - id: ble.battery.service
+    title: Battery service
+    interfaceType: device
+    transport: ble-gatt
+    pattern: attributeAccess
+    tags: [ble, gatt, battery]
+    auth: bleSecureConnection
+    address:
+      kind: gattService
+      value: "0x180F"
+    bindings:
+      ble-gatt:
+        role: gattServer
+        service:
+          uuid: "0x180F"
+          type: primary
+        characteristics:
+          - id: batteryLevel
+            uuid: "0x2A19"
+            properties: [read, notify]
+            value:
+              schema: BatteryLevel
+            descriptors:
+              - uuid: "0x2902"
+                value:
+                  schema: Cccd

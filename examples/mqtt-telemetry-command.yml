@@ -1,0 +1,327 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: mqtt-telemetry-v1
+  title: Device MQTT telemetry and command bus
+  version: 2.0.1
+  description: |
+    Topics for retained status, high-rate telemetry, cloud-to-device commands,
+    and job progress. QoS, retain, TTL, and bounded retry are declared per operation.
+
+servers:
+  mqtt:
+    broker: mqtts://broker.thinca.example:8883
+    fallback: mqtts://broker-jp2.thinca.example:8883
+
+auth:
+  schemes:
+    mqttClientCert:
+      type: mtls
+      description: Per-device client certificate; CN equals deviceId.
+
+components:
+  schemas:
+    TelemetrySample:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        seq:
+          type: integer
+          required: true
+          example: 184422
+        capturedAt:
+          type: datetime
+          required: true
+          example: "2026-09-15T02:14:11.214Z"
+        channels:
+          type: object
+          required: true
+          fields:
+            temperatureC:
+              type: number
+              unit: celsius
+              example: 24.62
+            humidityPct:
+              type: number
+              unit: percent
+              example: 51.8
+            pressurePa:
+              type: integer
+              unit: pascal
+              example: 101325
+            rssiDbm:
+              type: integer
+              unit: dBm
+              example: -71
+        flags:
+          type: object
+          fields:
+            calibrated:
+              type: boolean
+              example: true
+            heaterOn:
+              type: boolean
+              example: false
+
+    DeviceStatus:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        status:
+          type: string
+          required: true
+          enum: [boot, run, dfu, fault]
+          example: run
+        firmware:
+          type: string
+          required: true
+          example: 2.17.4
+        uptimeSec:
+          type: integer
+          unit: second
+          example: 86412
+
+    CloudCommand:
+      type: object
+      fields:
+        commandId:
+          type: string
+          required: true
+          example: cmd-88af
+        name:
+          type: string
+          required: true
+          enum: [reboot, identify, setReportInterval, enterDfu]
+        issuedAt:
+          type: datetime
+          required: true
+        payload:
+          type: object
+          fields:
+            intervalSec:
+              type: integer
+              unit: second
+              example: 15
+
+    CommandAck:
+      type: object
+      fields:
+        commandId:
+          type: string
+          required: true
+          example: cmd-88af
+        result:
+          type: string
+          required: true
+          enum: [accepted, rejected, applied]
+        reason:
+          type: string
+          example: interval-clamped-to-10s
+
+    JobProgress:
+      type: object
+      fields:
+        jobId:
+          type: string
+          required: true
+          example: ota-2217
+        phase:
+          type: string
+          required: true
+          enum: [download, verify, apply, reboot]
+        percent:
+          type: integer
+          unit: percent
+          example: 42
+        bytesReceived:
+          type: integer
+          example: 786432
+
+operations:
+  - id: mqtt.status.publish
+    title: Publish retained device status
+    interfaceType: event
+    transport: mqtt
+    pattern: publishSubscribe
+    tags: [mqtt, status]
+    auth: mqttClientCert
+    address:
+      kind: topic
+      value: fleet/{tenantId}/devices/{deviceId}/status
+    parameters:
+      topic:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+    bindings:
+      mqtt:
+        direction: publish
+        qos: 1
+        retain: true
+        delivery:
+          mode: broker-persisted
+          ttl: PT15M
+        retry:
+          strategy: bounded-exponential
+          maxAttempts: 5
+          backoff: PT1S
+    message:
+      role: event
+      contentType: application/json
+      schema: DeviceStatus
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+      duplicateHandling: last-writer
+    retry:
+      maxAttempts: 5
+      backoff: exponential
+      initialDelayMs: 250
+
+  - id: mqtt.telemetry.publish
+    title: Publish high-rate telemetry
+    interfaceType: event
+    transport: mqtt
+    pattern: publishSubscribe
+    tags: [mqtt, telemetry]
+    auth: mqttClientCert
+    address:
+      kind: topic
+      value: fleet/{tenantId}/devices/{deviceId}/telemetry
+    parameters:
+      topic:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+    bindings:
+      mqtt:
+        direction: publish
+        qos: 0
+        retain: false
+    message:
+      role: event
+      contentType: application/json
+      schema: TelemetrySample
+    delivery:
+      guarantee: at-most-once
+      ordering: none
+
+  - id: mqtt.command.subscribe
+    title: Receive cloud-to-device command
+    interfaceType: event
+    transport: mqtt
+    pattern: publishSubscribe
+    tags: [mqtt, command]
+    auth: mqttClientCert
+    address:
+      kind: topic
+      value: fleet/{tenantId}/devices/{deviceId}/commands
+    parameters:
+      topic:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+    bindings:
+      mqtt:
+        direction: subscribe
+        qos: 1
+        retain: false
+    message:
+      role: command
+      contentType: application/json
+      schema: CloudCommand
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+    retry:
+      maxAttempts: 3
+      backoff: exponential
+
+  - id: mqtt.command.ack
+    title: Acknowledge command
+    interfaceType: event
+    transport: mqtt
+    pattern: publishSubscribe
+    tags: [mqtt, command]
+    auth: mqttClientCert
+    address:
+      kind: topic
+      value: fleet/{tenantId}/devices/{deviceId}/commands/{commandId}/ack
+    parameters:
+      topic:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+        commandId:
+          type: string
+          required: true
+          description: Command identifier being acknowledged.
+    bindings:
+      mqtt:
+        direction: publish
+        qos: 1
+        retain: false
+    message:
+      role: ack
+      contentType: application/json
+      schema: CommandAck
+
+  - id: mqtt.ota.progress
+    title: Publish OTA job progress
+    interfaceType: event
+    transport: mqtt
+    pattern: publishSubscribe
+    tags: [mqtt, ota]
+    auth: mqttClientCert
+    address:
+      kind: topic
+      value: fleet/{tenantId}/devices/{deviceId}/jobs/{jobId}/progress
+    parameters:
+      topic:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+        jobId:
+          type: string
+          required: true
+          description: OTA job identifier.
+    bindings:
+      mqtt:
+        direction: publish
+        qos: 1
+        retain: true
+    message:
+      role: progress
+      contentType: application/json
+      schema: JobProgress

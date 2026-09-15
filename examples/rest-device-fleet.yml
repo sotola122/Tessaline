@@ -1,0 +1,419 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: fleet-rest-v1
+  title: Device Fleet REST API
+  version: 1.3.0
+  description: |
+    Multi-tenant REST surface for provisioning, telemetry snapshots, OTA jobs,
+    and command dispatch. Nested schemas, pagination, and error envelopes.
+
+servers:
+  http:
+    baseUrl: https://api.thinca.example/v1
+    sandbox: https://sandbox.api.thinca.example/v1
+
+auth:
+  schemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Tenant JWT with fleet.device.read / fleet.device.write.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Tenant-Key
+
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      fields:
+        code:
+          type: string
+          required: true
+          example: DEVICE_NOT_FOUND
+        message:
+          type: string
+          required: true
+          example: Device not found
+        requestId:
+          type: string
+          required: true
+          example: req-7f5a2c
+        details:
+          type: object
+          required: false
+          fields:
+            field:
+              type: string
+              example: serial
+            reason:
+              type: string
+              example: unknown serial
+
+    DeviceIdentity:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        serial:
+          type: string
+          required: true
+          example: TN-24-184422
+        sku:
+          type: string
+          required: true
+          enum: [TN-ENV-1, TN-PWR-2, TN-GW-3]
+          example: TN-ENV-1
+        firmware:
+          type: object
+          required: true
+          fields:
+            version:
+              type: string
+              required: true
+              example: 2.17.4
+            gitSha:
+              type: string
+              required: true
+              example: 8c1b0e2
+            slot:
+              type: string
+              required: true
+              enum: [A, B]
+              example: A
+
+    DeviceHealth:
+      type: object
+      fields:
+        status:
+          type: string
+          required: true
+          enum: [online, degraded, offline, updating]
+          example: online
+        lastSeenAt:
+          type: datetime
+          required: true
+          example: "2026-09-15T02:14:11Z"
+        metrics:
+          type: object
+          required: true
+          fields:
+            rssiDbm:
+              type: integer
+              unit: dBm
+              example: -67
+            temperatureC:
+              type: number
+              unit: celsius
+              example: 36.4
+            batteryMv:
+              type: integer
+              unit: millivolt
+              example: 3720
+
+    Device:
+      type: object
+      fields:
+        identity:
+          type: object
+          required: true
+          fields:
+            deviceId:
+              type: string
+              required: true
+              example: dev-0a91
+            serial:
+              type: string
+              required: true
+              example: TN-24-184422
+        health:
+          type: object
+          required: true
+          fields:
+            status:
+              type: string
+              required: true
+              example: online
+            lastSeenAt:
+              type: datetime
+              required: true
+              example: "2026-09-15T02:14:11Z"
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["factory-a", "pilot"]
+
+    DeviceList:
+      type: object
+      fields:
+        items:
+          type: array
+          required: true
+          items: Device
+        page:
+          type: object
+          required: true
+          fields:
+            nextCursor:
+              type: string
+              example: cur_19f
+            limit:
+              type: integer
+              example: 50
+            total:
+              type: integer
+              example: 1284
+
+    CreateDeviceRequest:
+      type: object
+      fields:
+        serial:
+          type: string
+          required: true
+          example: TN-24-184422
+        sku:
+          type: string
+          required: true
+          example: TN-ENV-1
+        siteId:
+          type: string
+          required: true
+          example: site-osaka-3
+        labels:
+          type: object
+          fields:
+            line:
+              type: string
+              example: SMT-2
+            operator:
+              type: string
+              example: yamada
+
+    CommandRequest:
+      type: object
+      fields:
+        commandId:
+          type: string
+          required: true
+          example: cmd-88af
+        name:
+          type: string
+          required: true
+          enum: [reboot, identify, setReportInterval, enterDfu]
+          example: setReportInterval
+        payload:
+          type: object
+          fields:
+            intervalSec:
+              type: integer
+              unit: second
+              example: 30
+            reason:
+              type: string
+              example: operator-request
+        deadline:
+          type: datetime
+          example: "2026-09-15T03:00:00Z"
+
+    CommandAccepted:
+      type: object
+      fields:
+        commandId:
+          type: string
+          required: true
+          example: cmd-88af
+        state:
+          type: string
+          required: true
+          enum: [queued, dispatched, acked, failed]
+          example: queued
+        statusUrl:
+          type: string
+          required: true
+          example: /v1/devices/dev-0a91/commands/cmd-88af
+
+operations:
+  - id: fleet.devices.list
+    title: List devices
+    summary: Cursor-paginated inventory with health snapshot.
+    interfaceType: api
+    transport: http
+    pattern: requestResponse
+    tags: [fleet, rest, read]
+    auth: bearer
+    address:
+      kind: path
+      method: GET
+      value: /v1/tenants/{tenantId}/devices
+    parameters:
+      path:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+      query:
+        siteId:
+          type: string
+          required: false
+          description: Filter by site.
+        status:
+          type: string
+          required: false
+          enum: [online, degraded, offline, updating]
+        cursor:
+          type: string
+          required: false
+        limit:
+          type: integer
+          required: false
+          example: 50
+    responses:
+      "200":
+        description: Page of devices.
+        contentType: application/json
+        schema: DeviceList
+      "401":
+        description: Missing or expired token.
+        contentType: application/json
+        schema: ErrorEnvelope
+    errors:
+      - code: UNAUTHORIZED
+        status: 401
+        retryable: false
+        description: Bearer token missing or invalid.
+    examples:
+      - title: First page
+        role: response
+        value:
+          items:
+            - identity: { deviceId: dev-0a91, serial: TN-24-184422 }
+              health: { status: online, lastSeenAt: "2026-09-15T02:14:11Z" }
+          page: { nextCursor: cur_19f, limit: 50, total: 1284 }
+
+  - id: fleet.devices.get
+    title: Get device
+    interfaceType: api
+    transport: http
+    pattern: requestResponse
+    tags: [fleet, rest, read]
+    auth: bearer
+    address:
+      kind: path
+      method: GET
+      value: /v1/tenants/{tenantId}/devices/{deviceId}
+    parameters:
+      path:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+    responses:
+      "200":
+        description: Device found.
+        contentType: application/json
+        schema: Device
+      "404":
+        description: Unknown device.
+        contentType: application/json
+        schema: ErrorEnvelope
+    errors:
+      - code: DEVICE_NOT_FOUND
+        status: 404
+        retryable: false
+        description: Serial or deviceId is not in this tenant.
+
+  - id: fleet.devices.create
+    title: Provision device
+    interfaceType: api
+    transport: http
+    pattern: requestResponse
+    tags: [fleet, rest, write]
+    auth: bearer
+    address:
+      kind: path
+      method: POST
+      value: /v1/tenants/{tenantId}/devices
+    parameters:
+      path:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+    request:
+      role: body
+      contentType: application/json
+      schema: CreateDeviceRequest
+    responses:
+      "201":
+        description: Device provisioned.
+        contentType: application/json
+        schema: Device
+      "409":
+        description: Serial already registered.
+        contentType: application/json
+        schema: ErrorEnvelope
+    errors:
+      - code: SERIAL_CONFLICT
+        status: 409
+        retryable: false
+        description: The serial is already bound to another deviceId.
+    retry:
+      maxAttempts: 1
+      backoff: none
+
+  - id: fleet.devices.command
+    title: Dispatch device command
+    description: Queues a command; delivery happens over MQTT or BLE depending on the last transport.
+    interfaceType: api
+    transport: http
+    pattern: requestResponse
+    tags: [fleet, rest, command]
+    auth: bearer
+    address:
+      kind: path
+      method: POST
+      value: /v1/tenants/{tenantId}/devices/{deviceId}/commands
+    parameters:
+      path:
+        tenantId:
+          type: string
+          required: true
+          description: Tenant identifier.
+        deviceId:
+          type: string
+          required: true
+          description: Device identifier.
+    request:
+      role: body
+      contentType: application/json
+      schema: CommandRequest
+    responses:
+      "202":
+        description: Command accepted for delivery.
+        contentType: application/json
+        schema: CommandAccepted
+      "409":
+        description: Device is updating and cannot accept commands.
+        contentType: application/json
+        schema: ErrorEnvelope
+    errors:
+      - code: DEVICE_BUSY
+        status: 409
+        retryable: true
+        description: Device is in OTA; retry after the job completes.
+    examples:
+      - title: Set report interval
+        role: request
+        value:
+          commandId: cmd-88af
+          name: setReportInterval
+          payload: { intervalSec: 30, reason: operator-request }

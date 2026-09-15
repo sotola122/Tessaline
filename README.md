@@ -32,3 +32,9 @@ const { svg } = renderInterfaceSVG(yamlSource);
 The SVG renderer measures columns and wraps cell text. It does not use Yoga or `foreignObject`.
 
 md-docs `apidoc` fences can set `renderer: svg` to take this path.
+
+## Examples
+
+Complex REST / MQTT / BLE GATT / JSON-RPC / webhook / WebSocket specs live in
+[`examples/`](./examples/). `tests/examples.test.ts` parses each YAML and renders
+HTML plus SVG.

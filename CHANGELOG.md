@@ -7,3 +7,4 @@
 - HTML tables remain the default renderer.
 - Add a Yoga-free SVG table layout renderer (`renderInterfaceSVG`).
 - Throw `TessalineError` with diagnostics.
+- Add multi-pattern Interface Spec YAML under `examples/` (REST, MQTT, BLE GATT, JSON-RPC, webhook, WebSocket; rendered by `tests/examples.test.ts`).

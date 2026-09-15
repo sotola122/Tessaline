@@ -1,0 +1,241 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: firmware-jsonrpc-v1
+  title: Firmware maintenance JSON-RPC
+  version: 0.9.0
+  description: |
+    Out-of-band command channel used by factory and field tools. Methods cover
+    identify, DFU session, NVS wipe, and calibration write. Errors use JSON-RPC codes.
+
+servers:
+  jsonrpc:
+    endpoint: wss://device-proxy.thinca.example/rpc
+
+auth:
+  schemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+components:
+  schemas:
+    RpcError:
+      type: object
+      fields:
+        code:
+          type: integer
+          required: true
+          example: -32001
+        message:
+          type: string
+          required: true
+          example: Device busy
+        data:
+          type: object
+          fields:
+            jobId:
+              type: string
+              example: ota-2217
+
+    IdentifyParams:
+      type: object
+      fields:
+        durationMs:
+          type: integer
+          required: true
+          unit: millisecond
+          example: 3000
+        pattern:
+          type: string
+          enum: [blink, beep, both]
+          example: both
+
+    IdentifyResult:
+      type: object
+      fields:
+        accepted:
+          type: boolean
+          required: true
+          example: true
+        until:
+          type: datetime
+          example: "2026-09-15T02:14:14Z"
+
+    DfuBeginParams:
+      type: object
+      fields:
+        imageSha256:
+          type: string
+          required: true
+          example: 9c1b0e2aa1ff...
+        sizeBytes:
+          type: integer
+          required: true
+          example: 1048576
+        slot:
+          type: string
+          enum: [A, B]
+          example: B
+
+    DfuBeginResult:
+      type: object
+      fields:
+        sessionId:
+          type: string
+          required: true
+          example: dfu-19
+        maxChunk:
+          type: integer
+          required: true
+          example: 512
+
+    CalWriteParams:
+      type: object
+      fields:
+        channel:
+          type: string
+          required: true
+          enum: [temp, humid, press]
+        offset:
+          type: number
+          required: true
+          example: -0.15
+        gain:
+          type: number
+          required: true
+          example: 1.002
+
+    CalWriteResult:
+      type: object
+      fields:
+        persisted:
+          type: boolean
+          required: true
+          example: true
+        crc16:
+          type: string
+          example: "0xB41C"
+
+operations:
+  - id: rpc.identify
+    title: Identify device
+    interfaceType: rpc
+    transport: jsonrpc
+    pattern: requestResponse
+    tags: [command, factory]
+    auth: bearer
+    address:
+      kind: method
+      value: device.identify
+    request:
+      role: params
+      contentType: application/json
+      schema: IdentifyParams
+    responses:
+      "200":
+        description: LED/buzzer started.
+        contentType: application/json
+        schema: IdentifyResult
+    errors:
+      - code: -32010
+        retryable: true
+        description: Identify already running.
+    examples:
+      - title: Blink and beep 3s
+        role: request
+        value: { durationMs: 3000, pattern: both }
+
+  - id: rpc.dfu.begin
+    title: Begin DFU session
+    interfaceType: rpc
+    transport: jsonrpc
+    pattern: requestResponse
+    tags: [command, ota]
+    auth: bearer
+    address:
+      kind: method
+      value: dfu.begin
+    request:
+      role: params
+      contentType: application/json
+      schema: DfuBeginParams
+    responses:
+      "200":
+        description: Session opened; subsequent chunks use dfu.write.
+        contentType: application/json
+        schema: DfuBeginResult
+    errors:
+      - code: -32001
+        retryable: true
+        description: Another DFU session is active.
+      - code: -32002
+        retryable: false
+        description: Image size exceeds slot capacity.
+    retry:
+      maxAttempts: 2
+      backoff: PT2S
+
+  - id: rpc.nvs.wipe
+    title: Wipe NVS settings
+    interfaceType: rpc
+    transport: jsonrpc
+    pattern: requestResponse
+    tags: [command, factory]
+    auth: bearer
+    address:
+      kind: method
+      value: nvs.wipe
+    request:
+      role: params
+      contentType: application/json
+      schema:
+        type: object
+        fields:
+          namespace:
+            type: string
+            required: true
+            enum: [wifi, cloud, all]
+            example: wifi
+          confirm:
+            type: string
+            required: true
+            example: WIPE
+    responses:
+      "200":
+        description: Namespace erased.
+        contentType: application/json
+        schema:
+          type: object
+          fields:
+            erasedKeys:
+              type: integer
+              example: 12
+    errors:
+      - code: -32020
+        retryable: false
+        description: confirm token mismatch.
+
+  - id: rpc.cal.write
+    title: Write factory calibration
+    interfaceType: rpc
+    transport: jsonrpc
+    pattern: requestResponse
+    tags: [command, cal]
+    auth: bearer
+    address:
+      kind: method
+      value: cal.write
+    request:
+      role: params
+      contentType: application/json
+      schema: CalWriteParams
+    responses:
+      "200":
+        description: Calibration persisted to UICR/NVS.
+        contentType: application/json
+        schema: CalWriteResult
+    errors:
+      - code: -32030
+        retryable: false
+        description: Channel locked after shipment.

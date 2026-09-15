@@ -1,0 +1,225 @@
+apiVersion: interface-spec/v1
+
+info:
+  id: lifecycle-webhooks-v1
+  title: Device lifecycle webhooks
+  version: 1.1.0
+  description: |
+    Cloud-to-integrator callbacks for provisioned, online, OTA completed, and
+    fault events. HMAC signatures, at-least-once delivery, bounded retry.
+
+servers:
+  webhook:
+    defaultTimeoutMs: 5000
+
+auth:
+  schemes:
+    webhookSignature:
+      type: hmac
+      header: X-Thinca-Signature
+      algorithm: sha256
+
+components:
+  schemas:
+    Envelope:
+      type: object
+      fields:
+        eventId:
+          type: string
+          required: true
+          example: evt-1001
+        type:
+          type: string
+          required: true
+          example: device.provisioned
+        occurredAt:
+          type: datetime
+          required: true
+          example: "2026-09-15T02:14:11Z"
+        tenantId:
+          type: string
+          required: true
+          example: tnt-88
+        data:
+          type: object
+          required: true
+          fields:
+            deviceId:
+              type: string
+              required: true
+              example: dev-0a91
+
+    ProvisionedData:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        serial:
+          type: string
+          required: true
+          example: TN-24-184422
+        siteId:
+          type: string
+          required: true
+          example: site-osaka-3
+
+    OtaCompletedData:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        jobId:
+          type: string
+          required: true
+          example: ota-2217
+        fromVersion:
+          type: string
+          required: true
+          example: 2.16.9
+        toVersion:
+          type: string
+          required: true
+          example: 2.17.4
+        durationSec:
+          type: integer
+          unit: second
+          example: 94
+
+    FaultData:
+      type: object
+      fields:
+        deviceId:
+          type: string
+          required: true
+          example: dev-0a91
+        code:
+          type: string
+          required: true
+          enum: [WATCHDOG, BROWN_OUT, SENSOR_STUCK, RADIO_TX_FAIL]
+          example: SENSOR_STUCK
+        consecutive:
+          type: integer
+          example: 3
+        lastLog:
+          type: string
+          example: sht4x nack after 5 retries
+
+operations:
+  - id: hook.device.provisioned
+    title: Device provisioned
+    interfaceType: event
+    transport: webhook
+    pattern: callback
+    tags: [event, webhook, provision]
+    auth: webhookSignature
+    address:
+      kind: url
+      method: POST
+      value: https://integrator.example/hooks/thinca/provisioned
+    bindings:
+      webhook:
+        contentType: application/json
+        signatureHeader: X-Thinca-Signature
+    message:
+      role: event
+      contentType: application/json
+      schema: Envelope
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+      duplicateHandling: eventId
+    retry:
+      maxAttempts: 8
+      backoff: exponential
+      initialDelayMs: 1000
+      maxDelayMs: 300000
+    examples:
+      - title: New factory unit
+        role: event
+        value:
+          eventId: evt-1001
+          type: device.provisioned
+          tenantId: tnt-88
+          data: { deviceId: dev-0a91, serial: TN-24-184422, siteId: site-osaka-3 }
+
+  - id: hook.device.online
+    title: Device came online
+    interfaceType: event
+    transport: webhook
+    pattern: callback
+    tags: [event, webhook]
+    auth: webhookSignature
+    address:
+      kind: url
+      method: POST
+      value: https://integrator.example/hooks/thinca/online
+    message:
+      role: event
+      contentType: application/json
+      schema: Envelope
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+    retry:
+      maxAttempts: 5
+      backoff: exponential
+
+  - id: hook.ota.completed
+    title: OTA job completed
+    interfaceType: event
+    transport: webhook
+    pattern: callback
+    tags: [event, webhook, ota]
+    auth: webhookSignature
+    address:
+      kind: url
+      method: POST
+      value: https://integrator.example/hooks/thinca/ota
+    request:
+      role: body
+      contentType: application/json
+      schema: OtaCompletedData
+    delivery:
+      guarantee: at-least-once
+    retry:
+      maxAttempts: 8
+      backoff: exponential
+    errors:
+      - code: INTEGRATOR_5XX
+        status: 502
+        retryable: true
+        description: Integrator returned 5xx; webhook will retry with backoff.
+
+  - id: hook.device.fault
+    title: Device fault
+    interfaceType: event
+    transport: webhook
+    pattern: callback
+    tags: [event, webhook, fault]
+    auth: webhookSignature
+    address:
+      kind: url
+      method: POST
+      value: https://integrator.example/hooks/thinca/fault
+    message:
+      role: event
+      contentType: application/json
+      schema: FaultData
+    delivery:
+      guarantee: at-least-once
+      ordering: per-device
+    retry:
+      maxAttempts: 8
+      backoff: exponential
+    examples:
+      - title: Stuck humidity sensor
+        role: event
+        value:
+          deviceId: dev-0a91
+          code: SENSOR_STUCK
+          consecutive: 3
+          lastLog: sht4x nack after 5 retries
